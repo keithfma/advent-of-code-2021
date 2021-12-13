@@ -23,8 +23,12 @@ class Cave:
             raise ValueError('Mixed case name is not allowed!')
 
     @property
-    def visit_once_only(self):
+    def is_small(self):
         return self.name.islower()
+
+    @property
+    def is_endpoint(self):
+        return self.name in {START_NAME, END_NAME}
 
     def add_neighbor(self, other: 'Cave'):
         self.nbrs.append(other)
@@ -38,6 +42,7 @@ class Cave:
 class Path:
 
     steps: T.Tuple['Cave'] = attr.ib()
+    can_revisit_small_cave: bool = attr.ib()
 
     def __attr_post_init__(self):
         if not self.steps or self.steps[0].name != START_NAME:
@@ -46,10 +51,18 @@ class Path:
     def add_step(self, step: 'Cave') -> 'Path':
         """Return a new Path with an extra last step"""
 
-        if step in self.steps and step.visit_once_only:
-            raise RevisitError(f'{self} cannot revisit {step}')
+        can_revisit_small_cave = self.can_revisit_small_cave
 
-        return self.__class__((*self.steps, step)) 
+        if step in self.steps and step.is_small:
+
+            if can_revisit_small_cave and not step.is_endpoint:
+                # only once! 
+                can_revisit_small_cave = False
+            else:
+                # already did it!
+                raise RevisitError(f'{self} cannot revisit {step}')
+
+        return self.__class__((*self.steps, step), can_revisit_small_cave) 
 
     @property
     def complete(self):
@@ -88,11 +101,11 @@ def parse_input(filename: str) -> T.Tuple[Cave, T.List[Cave], Cave]:
 
 
 
-def count_unique_paths(start: Cave) -> int:
+def count_unique_paths(start: Cave, allow_revisits: bool) -> int:
 
     complete_paths = 0 
 
-    open_paths = [Path([start])]
+    open_paths = [Path([start], allow_revisits)]
 
     while open_paths:
     
@@ -118,16 +131,21 @@ def count_unique_paths(start: Cave) -> int:
 if __name__ == '__main__':
     
 
-    input_file = 'test_input_1.txt'
-    input_file = 'test_input_2.txt'
+    #input_file = 'test_input_1.txt'
+    #input_file = 'test_input_2.txt'
     input_file = 'input.txt'
 
     start_cave, caves, end_cave = parse_input(input_file) 
 
     print('puzzle 1 ----------')
-    print(f'Number of unique paths: {count_unique_paths(start_cave)}')
+    unique_paths_no_revisits = count_unique_paths(start_cave, allow_revisits=False)
+    print(f'Number of unique paths without revisits: {unique_paths_no_revisits}')
     print()
 
+    print('puzzle 2 ----------')
+    unique_paths_with_revisits = count_unique_paths(start_cave, allow_revisits=True)
+    print(f'Number of unique paths with revisits: {unique_paths_with_revisits}')
+    print()
 
 
             
