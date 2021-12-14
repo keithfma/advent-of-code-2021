@@ -118,5 +118,9 @@ if __name__ == '__main__':
     for fold in folds:
         page = page.fold_me(fold)
         print(f'{fold}: num_dots = {page.num_dots}')
+    print()
     
+    print('puzzle 2 ----------')
+    page.display()
+    print()
     
