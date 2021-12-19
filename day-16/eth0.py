@@ -4,15 +4,21 @@ import dataclasses as dc
 import enum
 import typing as T
 from pdb import set_trace
+from math import prod
 
 
 ENDIAN = 'big'
 
 
 class PacketType(enum.Enum):
+    SUM = 0
+    PRODUCT = 1
+    MINIMUM = 2
+    MAXIMUM = 3
     LITERAL = 4
-    # note: there will be specific operator types in part 2
-    OPERATOR = 0
+    GREATER_THAN = 5
+    LESS_THAN = 6
+    EQUAL_TO = 7
 
 
 @dc.dataclass(frozen=True)
@@ -27,14 +33,11 @@ class Header:
         Return the header and the index just after the end of the parsed header
         """
         version = ba2int(bits[idx:idx+3])
-
-        try:
-            type_ = PacketType(ba2int(bits[idx+3:idx+6]))
-        except ValueError:
-            # fall back to generic operator, until the operator types are defined
-            type_ = PacketType.OPERATOR
-
+        type_ = PacketType(ba2int(bits[idx+3:idx+6]))
         return cls(version, type_), idx + 6
+
+
+# TODO: just one class will do the trick you know...
 
 
 @dc.dataclass
@@ -69,6 +72,32 @@ class LiteralPacket(Packet):
 class OperatorPacket(Packet):
 
     children: T.List[Packet] = dc.field(repr=False)
+
+    @property
+    def value(self) -> int:
+
+        if self.header.type == PacketType.SUM:
+            return sum(c.value for c in self.children)
+
+        if self.header.type == PacketType.PRODUCT:
+            return prod(c.value for c in self.children)
+
+        if self.header.type == PacketType.MINIMUM:
+            return min(c.value for c in self.children)
+
+        if self.header.type == PacketType.MAXIMUM:
+            return max(c.value for c in self.children)
+
+        if self.header.type == PacketType.GREATER_THAN:
+            return self.children[0].value > self.children[1].value
+
+        if self.header.type == PacketType.LESS_THAN:
+            return self.children[0].value < self.children[1].value
+
+        if self.header.type == PacketType.EQUAL_TO:
+            return self.children[0].value == self.children[1].value
+
+        raise ValueError(f'No operation defined for type: {self.header.type}')
     
     @classmethod
     def from_bits(cls, header: Header, bits: bitarray, idx: int, parent: T.Optional[Packet]) -> T.Tuple['OperatorPacket', T.Optional[int]]:
@@ -106,23 +135,16 @@ class OperatorPacket(Packet):
         return self, idx
 
 
-PACKET_TYPE_TO_CLASS: T.Mapping[PacketType, T.Type[Packet]] = {
-    PacketType.LITERAL: LiteralPacket,
-    PacketType.OPERATOR: OperatorPacket,
-}
-
-
 def next_packet(bits: bitarray, idx: int, parent: T.Optional[Packet]) -> T.Tuple[Packet, T.Optional[int]]:
     """Parse the next packet beginning at index 'idx' with optional parent packet 'parent'
     Return the packet and the index just after the end of the parsed packet, or None if that was the last packet
     """
     header, idx= Header.from_bits(bits, idx)
-    # print(f'Next packet: {header}')
     
-    try:
-        packet_class = PACKET_TYPE_TO_CLASS[header.type]
-    except KeyError as err:
-        raise ValueError(f'Unsupported packet type: {header.type}') from err
+    if header.type == PacketType.LITERAL:
+        packet_class = LiteralPacket
+    else: 
+        packet_class = OperatorPacket
 
     return packet_class.from_bits(header, bits, idx, parent)
     
@@ -145,6 +167,7 @@ def unpack_children(packet: Packet) -> T.List[Packet]:
             objs.extend(unpack_children(child))
     return objs
 
+
 def sum_versions(packet: Packet) -> int:
     return sum(p.header.version for p in unpack_children(packet))
         
@@ -161,7 +184,7 @@ if __name__ == '__main__':
     # test case 2: operator packet with length-type-id 0 containing 2 subpackets
     test_2_hex = '38006F45291200'
     test_2 = hex_to_packet(test_2_hex)
-    assert test_2.header.type == PacketType.OPERATOR
+    assert test_2.header.type == PacketType.LESS_THAN
     assert test_2.header.version == 1
     assert len(test_2.children) == 2
     for child, value in zip(test_2.children, [10, 20]):
@@ -172,7 +195,7 @@ if __name__ == '__main__':
     # test case 3: operator packet with length-type-id 1 containing 3 subpackets
     test_3_hex = 'EE00D40C823060'
     test_3 = hex_to_packet(test_3_hex)
-    assert test_3.header.type == PacketType.OPERATOR
+    assert test_3.header.type == PacketType.MAXIMUM
     assert test_3.header.version == 7
     assert len(test_3.children) == 3
     for child, value in zip(test_3.children, [1, 2, 3]):
@@ -194,8 +217,7 @@ if __name__ == '__main__':
     print(f'Sum of version numbers: {sum_versions(input_packet)}')
     print()
     
-
-    
-
-         
+    print('puzzle 2----------')
+    print(f'Value of input packet is: {input_packet.value}')
+    print()
     
